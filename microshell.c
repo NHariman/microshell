@@ -6,158 +6,94 @@
 /*   By: nhariman <nhariman@student.codam.nl>         +#+                     */
 /*                                                   +#+                      */
 /*   Created: 2022/03/04 15:55:57 by nhariman      #+#    #+#                 */
-/*   Updated: 2022/03/04 20:30:13 by nhariman      ########   odam.nl         */
+/*   Updated: 2022/03/08 21:57:34 by nhariman      ########   odam.nl         */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <strings.h>
+#include <sys/wait.h>
 
-int	ft_strlen(char *str)
+// create a write to stderr function
+
+void	ft_print(int fd, char *str)
 {
 	int i = 0;
 	while (str[i] != '\0')
 		i++;
-	return (i);
+	write(fd, str, i);
 }
 
-void ft_puterr(char *str)
+int		ft_execute(int i, char **av, char **envp)
 {
-	write(2, str, ft_strlen(str));
+	execve(av[0], av, envp);
+	ft_print(2, "error: cannot execute ");
+	ft_print(2, av[0]);
+	ft_print(2, "\n");
+	return (1);
 }
 
-char	*ft_strdup(char *str)
+int		main(int argc, char **argv, char **envp)
 {
-	char *dup = (char *)malloc((ft_strlen(str) + 1) * sizeof(char));
-	for (i = 0; i < ft_strlen(str); i++)
-		dup[i] = str[i];
-	dup[i] = '\0';
-	return (dup);
-}
-
-char **get_argv(char **argv, int *begin)
-{
-	int i = 0;
-	while (strcmp(argv[*begin + i], ";") && strcmp(argv[*begin + i], ""))
-		i++;
-	char **av;
-	av = (char **)malloc((i + 1) * sizeof(char *));
-	for (int j = 0; j < i; i++)
-		av[j] = ft_strdup(argv[*begin + j]);
-	av[*begin + j] = NULL;
-	*begin = j;
-	return (av);
-}
-
-void free_av(char **av)
-{
-	int len = ft_avlen(av);
-	for (int i = 0; i < av; i++)
-		free(av[i]);
-}
-
-char **get_pipes(char **argv, int *begin)
-{
-	int i = 0;
-	int pipes = 0;
-	while (strcmp(argv[*begin + i], ""))
-	{
-		if (strcmp(argv[*begin + i], "|") == 0)
-			pipes++;
-		i++;
-	}
-	char **av;
-	av = (char **)malloc((pipes + 1) * sizeof(char *));
-	for (int j = 0; j < pipes; i++)
-	{
-		if (strcmp(argv[*begin + j], "|") != 0)
-			av[j] = ft_strdup(argv[*begin + j]);
-	}
-	av[j] = NULL;
-	*begin = *begin + i;
-	return (av);
-}
-
-int	get_avlen(char *av)
-{
-	int i = 0;
-	while (av[i] != NULL)
-		i++;
-	return (i);
-}
-
-int	main(int ac, char **argv, char **env)
-{
-	if (ac == 1)
-		return 0;
-	int i = 0;
 	int fd[2];
-	pid_t childpid;
-	pid_t og_fd;
-	char	**av;
-	char	**pipes;
+	int og_fd;
+	int i = 0;
 
-	og_fd = dup(STDIN_FILENO); save og file desc
-	//split argv into ;s
-	while (argv[i] && argv[i + 1])
+	if (argc == 1)
+		return 0;
+	og_fd = dup(0);
+	while (argv[i] != NULL)
 	{
-		// get char **av until either NULL or ;
-		if (argv[i][0] == ';')
+		argv = &argv[i + 1];
+		i = 0;
+		// gather all arguments until ; or |
+		while (argv[i] && strcmp(argv[i], ";") && strcmp(argv[i], "|"))
 			i++;
-		av = get_argv(argv, &i);
-		if (strcmp(av[i], "cd") == 0)
+		//if cd
+		if (!strcmp(argv[0], "cd"))
 		{
-			i++;
-			if (get_avlen(av) > 2)
+			if (i != 2)
+				ft_print(2, "error: cd: bad arguments\n");
+			else if (chdir(argv[1]) != 0)
 			{
-				ft_puterr("error: cd: bad arguments\n");
-			}
-			else if (chdir(argv[i]) == -1)
-			{
-				ft_puterr("error: cd: cannot change directory to ");
-				ft_puterr(argv[i]);
-				ft_puterr("\n");
+				ft_print(2, "error: cd: cannot change directory to ");
+				ft_print(2, argv[1]);
+				ft_print(2, "\n");
 			}
 		}
-		else if (// execve with and without pipes here)
+		else if (argv[i] && !strcmp(argv[i], "|"))
 		{
-			// if pipes go to pipes before executing
-			//piping be lke:
-			if (pipes)
+			ft_print(1, "pipes here\n");
+		}
+		else
+		{
+			int child_pid;
+			int	child_stat;
+
+			child_pid = fork();
+			av[i] = NULL;
+			if (child_pid < 0)
 			{
-				while (av[i] != NULL)
-				{
-					pipe(fd);
-					if ((childpid = fork()) == -1)
-						exit (1);
-					else if (childpid == 0) // in child
-					{
-						dup2(og_fd, 0);
-						if (argv[i + 1] != NULL)
-							dup2(fd[1], 1);
-						close(fd[0]);
-						execve(//command, //argv for command, //env );
-						exit(1);
-					}
-					else // in parent
-					{
-						wait(NULL);
-						close(fd[1]);
-						og_fd = fd[0];
-						i++; // increment the argv to the next pipe
-					}
-					free_av(//pipe array);
-				}
+				ft_print(2, "error: fatal\n");
+				exit(1);
 			}
+			else if (child_pid == 0)
+				ft_execute(i, argv, envp);
 			else
 			{
-				// just execute
+				waitpid(-1, NULL, WUNTRACED);
 			}
-			// research how pipes work
-			// research how execve works
+			ft_print(1, "semicolon or regular execute here\n");
 		}
-		free(av);
-		i++;
+		// for(int j = 0; j < i; j++)
+		// {
+		// 	ft_print(1, argv[j]);
+		// 	ft_print(1, "\n");
+		// }
+		// ft_print(1,"end loop\n");
+
 	}
+	return (0);
 }
