@@ -1,0 +1,68 @@
+includes:
+- stdlib.h
+- unistd.h
+- strings.h
+- sys/wait.h
+
+// create a function that does the printing to stderr
+write(2, str, len);
+
+// ft_execute: create an execute function that is ONLY used in child processes and closes the tmp_fd which contains the STDIN_FILENO
+function takes: int i, char **av, int tmp_fd, char **envp
+- close(tmp_fd)
+- set av[i] = NULL
+- execve(av[0], av, envp)
+- if error, print error and return 1
+
+// main starts 
+- required variables:
+	int fd[2] // for pipes
+	int tmp_fd // for saving STDIN_FILENO
+	int	pid // for child_pid distinguishing
+	int i; // for the while loop
+
+save the og STDIN_FILENO in tmp_fd.
+set pid and i to 0
+
+START MAIN WHILE LOOP
+- start while loop and don't stop until you've reached the argv[i] before the NULL
+- move the argv list up by one using: argv = &argv[i + 1];
+- set i to 0 again
+
+- use another while loop to count the amount of arguments until ;, NULL or |
+
+IMPORTANT PART: THE ORDER OF THE IF ELSE TREE IS IMPORTANT, IF DONE DIFFERENTLY IT MAY SEGFAULT.
+if av[0] == "cd" do cd stuff:
+	- if i is larger than 2, print an error and move one
+	- else, use chdir() to change the directory to av[1];
+		- if there's an error using chdir, print the error
+
+else if av[i] == NULL | av[i] == ;
+	- perform regular forking and execve
+	- use pid to fork() into
+	- if pid == 0 (the child process)
+		- dup2(tmp_fd, STDIN_FILENO);
+		- ft_execute
+			if error return 1
+	- else (the parent process)
+		- close(tmp_fd)
+		- waitpid(-1, NULL, WUTRACED)
+		- tmp_fd = dup(STDIN_FILENO);
+
+else if av[i] == |
+	- similar to above, but with some extra close, dup2 and pipe steps
+	- pipe(fd)
+	- use pid to fork() into
+	- if pid == 0 (the child process)
+		- dup2(fd[1], STDOUT_FILENO);
+		- dup2(tmp_fd, STDIN_FILENO);
+		- close(fd[0]);
+		- close(fd[1]);
+		- ft_execute
+			if error return 1
+	- else (the parent process)
+		- close(tmp_fd)
+		- close(fd[1]);
+		- waitpid(-1, NULL, WUTRACED)
+		- tmp_fd = dup(fd[0]);
+		- close(fd[0])
